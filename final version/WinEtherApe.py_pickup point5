@@ -2,41 +2,14 @@ import sys
 import threading
 import asyncio
 import math
-import dns.resolver
 from ipaddress import ip_address, IPv4Address
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsEllipseItem, QGraphicsTextItem, QVBoxLayout, QWidget, QSlider
-from PyQt5.QtCore import Qt, pyqtSignal, QObject, QTimer, QThread
+from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsEllipseItem, QGraphicsTextItem
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, QTimer
 from PyQt5.QtGui import QPen, QColor, QFont
 import pyshark
 
 class PacketSignal(QObject):
     new_packet = pyqtSignal(str, str, str, int)
-
-class DNSResolverThread(QThread):
-    resolved = pyqtSignal(str, str)
-    failed = pyqtSignal(str)
-
-    def __init__(self, ip):
-        super().__init__()
-        self.ip = ip
-
-    def run(self):
-        try:
-            url = self.resolve_dns(self.ip)
-            if url:
-                self.resolved.emit(self.ip, url)
-            else:
-                self.failed.emit(self.ip)
-        except Exception:
-            self.failed.emit(self.ip)
-
-    def resolve_dns(self, ip):
-        try:
-            resolver = dns.resolver.Resolver()
-            result = resolver.resolve_address(ip)
-            return result[0].to_text()
-        except Exception:
-            return None
 
 class NetworkVisualizer(QGraphicsView):
     PROTOCOL_COLORS = {
@@ -67,10 +40,6 @@ class NetworkVisualizer(QGraphicsView):
         self.reposition_timer = QTimer(self)
         self.reposition_timer.timeout.connect(self.position_hosts)
         self.reposition_timer.start(1000)  # Reposition every second
-
-        self.dns_queue = []
-        self.dns_in_progress = False
-        self.rotation_angle = 0
 
     def init_protocol_legend(self):
         y_offset = 10
@@ -106,8 +75,6 @@ class NetworkVisualizer(QGraphicsView):
                                   dst_node.x() + dst_node.rect().width() / 2, dst_node.y() + dst_node.rect().height() / 2,
                                   QPen(line_color))
         self.lines.append((line, src_ip, dst_ip))
-        self.queue_dns_resolution(src_ip)
-        self.queue_dns_resolution(dst_ip)
 
     def update_data_size(self, ip, size):
         if ip not in self.bandwidth_usage:
@@ -175,7 +142,7 @@ class NetworkVisualizer(QGraphicsView):
         positions = {}
 
         for i, (ip, (node, text)) in enumerate(self.hosts.items()):
-            angle = i * (2 * math.pi / num_hosts) + self.rotation_angle
+            angle = i * (2 * math.pi / num_hosts)
             x = center_x + radius * math.cos(angle) - node.rect().width() / 2
             y = center_y + radius * math.sin(angle) - node.rect().height() / 2
             node.setPos(x, y)
@@ -189,67 +156,18 @@ class NetworkVisualizer(QGraphicsView):
                 dst_pos = positions[dst_ip]
                 line.setLine(src_pos[0], src_pos[1], dst_pos[0], dst_pos[1])
 
-    def queue_dns_resolution(self, ip):
-        if ip not in self.dns_queue:
-            self.dns_queue.append(ip)
-            if not self.dns_in_progress:
-                self.process_dns_queue()
-
-    def process_dns_queue(self):
-        if self.dns_queue:
-            self.dns_in_progress = True
-            ip = self.dns_queue.pop(0)
-            resolver_thread = DNSResolverThread(ip)
-            resolver_thread.resolved.connect(self.handle_dns_resolved)
-            resolver_thread.failed.connect(self.handle_dns_failed)
-            resolver_thread.start()
-            QTimer.singleShot(5000, lambda: resolver_thread.terminate())  # Timeout after 5 seconds
-        else:
-            self.dns_in_progress = False
-
-    def handle_dns_resolved(self, ip, url):
-        if ip in self.hosts:
-            node, text = self.hosts[ip]
-            text.setPlainText(url)
-        self.process_dns_queue()
-
-    def handle_dns_failed(self, ip):
-        if ip in self.hosts:
-            node, text = self.hosts[ip]
-            text.setPlainText(ip)
-        self.process_dns_queue()
-
-    def rotate_nodes(self, angle):
-        self.rotation_angle = math.radians(angle)
-        self.position_hosts()
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("WinEtherApe")
         self.setGeometry(100, 100, 800, 600)
-
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-
         self.visualizer = NetworkVisualizer(self)
-        self.slider = QSlider(Qt.Horizontal)
-        self.slider.setRange(-180, 180)
-        self.slider.setValue(0)
-        self.slider.valueChanged.connect(self.handle_slider_change)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.visualizer)
-        layout.addWidget(self.slider)
-        self.central_widget.setLayout(layout)
+        self.setCentralWidget(self.visualizer)
         
         self.packet_signal = PacketSignal()
         self.packet_signal.new_packet.connect(self.handle_new_packet)
         
         self.start_capture()
-
-    def handle_slider_change(self, value):
-        self.visualizer.rotate_nodes(value)
 
     def handle_new_packet(self, src_ip, dst_ip, protocol, size):
         self.visualizer.add_packet(src_ip, dst_ip, protocol, size)
