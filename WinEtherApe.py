@@ -3,6 +3,9 @@ import threading
 import asyncio
 import math
 import dns.resolver
+import psutil
+import socket
+import os
 from ipaddress import ip_address, IPv4Address
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsEllipseItem, QGraphicsTextItem, QVBoxLayout, QWidget, QSlider
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QTimer, QThread
@@ -259,7 +262,27 @@ class MainWindow(QMainWindow):
 
     def capture_packets(self):
         asyncio.set_event_loop(asyncio.new_event_loop())
-        capture = pyshark.LiveCapture(interface='\\Device\\NPF_{53573073-74B9-4784-BF6A-F0F01473EBED}')  # Replace with the correct interface name
+        interfaces = psutil.net_if_addrs()
+        active_interface = None
+        for interface_name, interface_addresses in interfaces.items():
+            for address in interface_addresses:
+                if address.family == socket.AF_INET:
+                    active_interface = interface_name
+                    break
+            if active_interface:
+                break
+
+        # Clear screen and move cursor to the top left
+        os.system('cls' if os.name == 'nt' else 'clear')
+        if active_interface:
+            print(f"\033[97mUsing interface: {active_interface}\033[0m")
+        else:
+            print("\033[97mNo active network interface found.\033[0m")
+
+        if not active_interface:
+            return
+
+        capture = pyshark.LiveCapture(interface=active_interface)
         for packet in capture.sniff_continuously():
             try:
                 src_ip = packet.ip.src
