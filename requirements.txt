@@ -1,0 +1,7 @@
+PyQt5==5.15.11
+pyshark==0.6
+dnspython==2.4.2
+lxml==5.2.2
+termcolor==2.4.0
+packaging==24.1
+appdirs==1.4.4
