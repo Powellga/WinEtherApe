@@ -265,11 +265,12 @@ class MainWindow(QMainWindow):
         interfaces = psutil.net_if_addrs()
         active_interface = None
         for interface_name, interface_addresses in interfaces.items():
-            if any(addr.family == socket.AF_INET for addr in interface_addresses):
-                # Check if the interface is up and running
-                if psutil.net_if_stats()[interface_name].isup:
+            for address in interface_addresses:
+                if address.family == socket.AF_INET:
                     active_interface = interface_name
                     break
+            if active_interface:
+                break
 
         # Clear screen and move cursor to the top left
         os.system('cls' if os.name == 'nt' else 'clear')
