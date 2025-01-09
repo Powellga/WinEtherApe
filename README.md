@@ -1,7 +1,7 @@
 # WinEtherApe
 Windows Ether Ape
 
-WinEtherApe is a basic network visualization tool inspired by the Linux-based EtherApe. It captures and displays network traffic in real-time, showing the connections between devices on your network.
+WinEtherApe is a basic network visualization tool inspired by the Linux-based EtherApe. It captures and displays network traffic in real-time, showing the connections between devices on your network. I wanted a version for Windows. The original version was only ever a Linux tool. I made a version for WIndows - Gratis for anyone to use. Gregg
 
 ## Features
 
